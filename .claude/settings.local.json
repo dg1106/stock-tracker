@@ -17,7 +17,8 @@
       "Bash(python scraper.py)",
       "Bash(python3 -c \":*)",
       "Bash(python -c \":*)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(curl -s -k -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" \"https://www.ustockplus.com/stock/stradvision-475040\")"
     ]
   }
 }

@@ -4,7 +4,6 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
-# 기업 네트워크 SSL 인터셉트 프록시 환경에서 경고 억제
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 HEADERS = {
@@ -19,9 +18,15 @@ HEADERS = {
 STOCK_URL = "https://www.ustockplus.com/stock/stradvision-475040"
 CHART_PERIODS = ["1m", "3m", "1y", "3y", "all"]
 
+IPO_STATUS_MAP = {
+    "EXAMINATION_IN_PROGRESS": "심사중",
+    "EXAMINATION_REQUESTED": "심사신청",
+    "LISTED": "상장완료",
+    "WITHDRAWAL": "철회",
+}
+
 
 def _fetch_queries() -> dict:
-    """ustockplus 페이지의 __NEXT_DATA__ 쿼리 맵을 반환한다."""
     resp = requests.get(STOCK_URL, headers=HEADERS, timeout=15, verify=False)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -34,38 +39,71 @@ def _fetch_queries() -> dict:
 
 
 def get_price() -> dict:
-    """스트라드비젼(475040) 가격 + 차트 정보를 반환한다."""
     try:
         qmap = _fetch_queries()
 
-        # 1. 현재가 / 전일대비 정보
+        # 1. 현재가 / 전일대비
         stock = (qmap.get(("stockDetail", "475040")) or {}).get("stock", {})
         current_price = stock.get("currentPrice")
         prev_price = stock.get("prevClosingPrice")
         change_price = stock.get("changePrice")
         change_rate = stock.get("changeRate")
-
         if stock.get("currentChangePrice"):
             change_price = stock["currentChangePrice"]
         if stock.get("currentChangeRate"):
             change_rate = stock["currentChangeRate"]
 
-        # 2. 매수/매도 호가 (priceVolumeChart)
-        chart = qmap.get(("priceVolumeChart", "475040")) or {}
-        sell_orders = chart.get("sell", [])
-        buy_orders = chart.get("buy", [])
-
+        # 2. 매수/매도 호가
+        ov = qmap.get(("priceVolumeChart", "475040")) or {}
+        sell_orders = ov.get("sell", [])
+        buy_orders = ov.get("buy", [])
         ask_price = min((o["price"] for o in sell_orders if o.get("price")), default=None)
         bid_price = max((o["price"] for o in buy_orders if o.get("price")), default=None)
 
-        # 3. 기간별 가격 추이 차트 데이터
+        # 3. 오늘 현황 + 52주 + 시가총액
+        vs = qmap.get(("valueSummary", "475040")) or {}
+        today_info = vs.get("todayMarketPriceInformation") or {}
+        today_high = today_info.get("todayHighestPrice")
+        today_low = today_info.get("todayLowestPrice")
+        today_volume = today_info.get("todayTradingVolume")
+        high_52w = today_info.get("highestPrice52Week")
+        low_52w = today_info.get("lowestPrice52Week")
+        market_cap = vs.get("marketCap")
+
+        # 4. 오늘 주문/체결 통계
+        stats = qmap.get(("stockDetailStatistics", "475040")) or {}
+        order_buy_today = stats.get("orderBuyToday", 0)
+        order_sell_today = stats.get("orderSellToday", 0)
+        trade_count_today = stats.get("countTradeToday", 0)
+
+        # 5. 최근 체결 내역 (최근 5건)
+        histories = (qmap.get(("tradeCompleteHistories", "475040")) or {}).get("tradeCompleteHistories", [])
+        recent_trades = []
+        for h in histories[:5]:
+            traded_at = h.get("tradedAt", "")
+            try:
+                dt = datetime.fromisoformat(traded_at)
+                time_str = dt.strftime("%m/%d %H:%M")
+            except Exception:
+                time_str = traded_at[:16]
+            recent_trades.append({
+                "time": time_str,
+                "price": h.get("price"),
+                "quantity": h.get("quantity"),
+            })
+
+        # 6. IPO 상태
+        ipo = qmap.get(("stockIpoDetail", "475040")) or {}
+        ipo_detail_state = (ipo.get("progress") or {}).get("ipoDetailState")
+        ipo_status = IPO_STATUS_MAP.get(ipo_detail_state, "해당없음")
+
+        # 7. 기간별 차트
         charts = {}
         for period in CHART_PERIODS:
             raw = qmap.get(("dailyBasePriceLineChart", "475040", period)) or {}
-            points = raw.get("data", [])
             charts[period] = [
                 {"date": p["date"], "price": p["price"]}
-                for p in points
+                for p in raw.get("data", [])
                 if p.get("price") is not None
             ]
 
@@ -77,6 +115,17 @@ def get_price() -> dict:
             "change_rate": change_rate,
             "ask_price": ask_price,
             "bid_price": bid_price,
+            "today_high": today_high,
+            "today_low": today_low,
+            "today_volume": today_volume,
+            "high_52w": high_52w,
+            "low_52w": low_52w,
+            "market_cap": market_cap,
+            "order_buy_today": order_buy_today,
+            "order_sell_today": order_sell_today,
+            "trade_count_today": trade_count_today,
+            "recent_trades": recent_trades,
+            "ipo_status": ipo_status,
             "charts": charts,
             "updated_at": datetime.now().isoformat(),
         }
@@ -90,8 +139,7 @@ def get_price() -> dict:
 
 if __name__ == "__main__":
     result = get_price()
-    # 차트 데이터는 길어서 요약 출력
     if result.get("charts"):
-        for p, pts in result["charts"].items():
-            result["charts"][p] = f"[{len(pts)} points]"
+        for p in result["charts"]:
+            result["charts"][p] = f"[{len(result['charts'][p])} points]"
     print(json.dumps(result, ensure_ascii=False, indent=2))
