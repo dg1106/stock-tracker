@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:claude.ai)",
+      "Bash(find . -name .* -o -name *)",
+      "WebFetch(domain:stockplus.com)",
+      "WebFetch(domain:www.kotc.or.kr)",
+      "WebFetch(domain:www.seoulexchange.kr)",
+      "WebSearch",
+      "WebFetch(domain:www.ustockplus.com)",
+      "Bash(curl -k -s -I https://www.ustockplus.com/stock/stradvision-475040)",
+      "Bash(curl -k -s -I https://www.seoulexchange.kr/stocks/SSTRVS0/information/)",
+      "Bash(curl -k -s https://www.ustockplus.com/stock/stradvision-475040)",
+      "Bash(curl -k -s https://www.seoulexchange.kr/stocks/%EC%8A%A4%ED%8A%B8%EB%9D%BC%EB%93%9C%EB%B9%84%EC%A0%BC-125/)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import fastapi, uvicorn, requests, bs4; print\\(''all ok''\\)\")",
+      "Bash(python scraper.py)",
+      "Bash(python3 -c \":*)",
+      "Bash(python -c \":*)",
+      "Bash(kill %1)"
+    ]
+  }
+}

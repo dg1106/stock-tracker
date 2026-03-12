@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스트라드비젼 주가</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e8eaed;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 480px;
+      margin-bottom: 24px;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #9aa0a6;
+      letter-spacing: 0.02em;
+    }
+
+    header p.sub {
+      font-size: 0.78rem;
+      color: #5f6368;
+      margin-top: 4px;
+    }
+
+    .card {
+      background: #1e2029;
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 480px;
+      margin-bottom: 16px;
+    }
+
+    .price-main {
+      font-size: 2.8rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .price-change {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .up   { color: #ea4335; }
+    .down { color: #34a853; }
+    .flat { color: #9aa0a6; }
+
+    .label {
+      font-size: 0.72rem;
+      color: #5f6368;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    .orderbook {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .ob-cell {
+      background: #272930;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .ob-price {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .ob-cell.ask .ob-price { color: #ea4335; }
+    .ob-cell.bid .ob-price { color: #34a853; }
+
+    .divider {
+      height: 1px;
+      background: #2d3140;
+      margin: 16px 0;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.88rem;
+      color: #9aa0a6;
+      padding: 4px 0;
+    }
+
+    .info-row span:last-child {
+      color: #e8eaed;
+      font-weight: 500;
+    }
+
+    .status-bar {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: #5f6368;
+      padding: 0 4px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #34a853;
+      margin-right: 5px;
+      animation: pulse 2s infinite;
+    }
+
+    .dot.error { background: #ea4335; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .error-msg {
+      color: #ea4335;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 12px;
+    }
+
+    #countdown {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>스트라드비젼 <span style="color:#5f6368;font-weight:400">475040</span></h1>
+  <p class="sub">비상장 주식 · 증권플러스</p>
+</header>
+
+<div class="card" id="main-card">
+  <div class="label">현재가</div>
+  <div class="price-main" id="current-price">—</div>
+  <div class="price-change" id="price-change">
+    <span id="change-price">—</span>
+    <span id="change-rate">—</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="orderbook">
+    <div class="ob-cell ask">
+      <div class="label">매도 최저가</div>
+      <div class="ob-price" id="ask-price">—</div>
+    </div>
+    <div class="ob-cell bid">
+      <div class="label">매수 최고가</div>
+      <div class="ob-price" id="bid-price">—</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="info-row">
+    <span>전일 종가</span>
+    <span id="prev-price">—</span>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div><span class="dot" id="status-dot"></span><span id="status-text">데이터 로딩 중...</span></div>
+  <div><span id="countdown">60</span>초 후 갱신</div>
+</div>
+
+<script>
+  const fmt = (n) => n != null ? Number(n).toLocaleString("ko-KR") + "원" : "—";
+  const fmtRate = (r) => r != null ? (r > 0 ? "+" : "") + Number(r).toFixed(2) + "%" : "—";
+  const fmtChange = (c) => c != null ? (c > 0 ? "+" : "") + Number(c).toLocaleString("ko-KR") + "원" : "—";
+
+  function setClass(el, val) {
+    el.classList.remove("up", "down", "flat");
+    if (val > 0) el.classList.add("up");
+    else if (val < 0) el.classList.add("down");
+    else el.classList.add("flat");
+  }
+
+  async function fetchPrice() {
+    try {
+      const res = await fetch("/api/price");
+      const d = await res.json();
+
+      if (!d.success) {
+        document.getElementById("status-text").textContent = d.error || "오류 발생";
+        document.getElementById("status-dot").className = "dot error";
+        return;
+      }
+
+      document.getElementById("current-price").textContent = fmt(d.current_price);
+      document.getElementById("prev-price").textContent = fmt(d.prev_price);
+
+      const cp = document.getElementById("change-price");
+      const cr = document.getElementById("change-rate");
+      cp.textContent = fmtChange(d.change_price);
+      cr.textContent = fmtRate(d.change_rate);
+      setClass(cp, d.change_price);
+      setClass(cr, d.change_rate);
+
+      document.getElementById("ask-price").textContent = fmt(d.ask_price);
+      document.getElementById("bid-price").textContent = fmt(d.bid_price);
+
+      const updatedAt = d.updated_at ? new Date(d.updated_at).toLocaleTimeString("ko-KR") : "—";
+      document.getElementById("status-text").textContent = updatedAt + " 기준";
+      document.getElementById("status-dot").className = "dot";
+    } catch (e) {
+      document.getElementById("status-text").textContent = "연결 오류";
+      document.getElementById("status-dot").className = "dot error";
+    }
+  }
+
+  // 카운트다운 타이머
+  let secondsLeft = 60;
+  function tick() {
+    document.getElementById("countdown").textContent = secondsLeft;
+    if (secondsLeft <= 0) {
+      secondsLeft = 60;
+      fetchPrice();
+    }
+    secondsLeft--;
+  }
+
+  fetchPrice();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
