@@ -41,6 +41,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 @app.get("/api/price")
+@app.head("/api/price")
 async def api_price():
     if _cache["data"] is None:
         return JSONResponse({"success": False, "error": "데이터 로딩 중입니다. 잠시 후 새로고침 해주세요."}, status_code=503)
