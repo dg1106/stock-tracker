@@ -19,8 +19,17 @@ STOCK_URL = "https://www.ustockplus.com/stock/stradvision-475040"
 CHART_PERIODS = ["1m", "3m", "1y", "3y", "all"]
 
 IPO_STATUS_MAP = {
-    "EXAMINATION_IN_PROGRESS": "심사중",
+    "IPO_ORGANIZER_SELECTION": "주관사선정",
+    "TECHNOLOGY_EVALUATIONS_PASS": "기술평가통과",
     "EXAMINATION_REQUESTED": "심사신청",
+    "EXAMINATION_IN_PROGRESS": "심사중",
+    "EXAMINATION_ACCEPTED": "심사승인",
+    "SUBMIT_REPORT": "증권신고서제출",
+    "DEMAND_FORECAST": "수요예측",
+    "OFFER_SUBSCRIPTION": "청약",
+    "TO_BE_LISTED": "상장예정",
+    "ALLOTMENT_DATE": "배정일",
+    "REFUND_DATE": "환불일",
     "LISTED": "상장완료",
     "WITHDRAWAL": "철회",
 }
