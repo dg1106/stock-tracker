@@ -42,7 +42,7 @@ IPO_STATUS_MAP = {
 
 
 def _fetch_queries(url: str) -> dict:
-    resp = requests.get(url, headers=HEADERS, timeout=15, verify=False)
+    resp = requests.get(url, headers=HEADERS, timeout=5, verify=False)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
     tag = soup.find("script", id="__NEXT_DATA__")
