@@ -44,6 +44,7 @@ async def api_price():
 
 
 @app.get("/")
+@app.head("/")
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
