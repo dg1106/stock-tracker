@@ -25,12 +25,7 @@ async def _refresh_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 앱 시작 시 즉시 첫 데이터 수집 후 백그라운드 루프 시작
-    try:
-        _cache["data"] = await asyncio.get_event_loop().run_in_executor(None, get_price)
-    except Exception as e:
-        print(f"[startup] initial fetch error: {e}")
-    task = asyncio.create_task(_refresh_loop())
+    task = asyncio.create_task(_refresh_loop())  # 바로 백그라운드로
     yield
     task.cancel()
 

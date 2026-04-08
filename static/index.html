@@ -141,6 +141,22 @@
     .period-btn.active { background: #2d3140; color: #e8eaed; }
     .chart-wrap { position: relative; height: 200px; }
 
+    /* IPO 타임라인 */
+    .timeline-item { display:flex; align-items:flex-start; gap:12px; padding:8px 0; position:relative; }
+    .timeline-item:not(:last-child)::after { content:""; position:absolute; left:7px; top:22px; bottom:-8px; width:2px; background:#2d3140; }
+    .tl-dot { flex-shrink:0; width:16px; height:16px; border-radius:50%; margin-top:2px; border:2px solid #2d3140; background:#1e2029; }
+    .tl-dot.done    { background:#34a853; border-color:#34a853; }
+    .tl-dot.current { background:#fbbc04; border-color:#fbbc04; box-shadow:0 0 6px rgba(251,188,4,0.5); animation:pulse 2s infinite; }
+    .tl-label { font-size:0.88rem; color:#9aa0a6; }
+    .tl-label.current { color:#fbbc04; font-weight:600; }
+    .tl-label.done    { color:#e8eaed; }
+    .tl-date  { font-size:0.75rem; color:#5f6368; margin-top:2px; }
+
+    /* 매수/매도 압력 바 */
+    .pressure-bar { height:8px; background:#ea4335; border-radius:4px; overflow:hidden; margin:8px 0 4px; }
+    .pressure-buy { height:100%; background:#34a853; border-radius:4px; transition:width 0.4s; }
+    .pressure-labels { display:flex; justify-content:space-between; font-size:0.78rem; font-weight:600; }
+
     /* 상태 바 */
     .status-bar {
       width: 100%; max-width: 560px;
@@ -199,10 +215,18 @@
       <div class="today-val" id="today-volume">—</div>
     </div>
     <div class="today-cell">
-      <div class="label">체결 / 매도주문</div>
+      <div class="label">매수 / 매도주문</div>
       <div class="today-val" id="today-stats">—</div>
     </div>
   </div>
+  <div class="divider"></div>
+  <div class="label" style="margin-bottom:4px">매수/매도 주문 비율</div>
+  <div class="pressure-bar"><div class="pressure-buy" id="pressure-buy" style="width:50%"></div></div>
+  <div class="pressure-labels">
+    <span id="pressure-buy-pct" style="color:#34a853">—</span>
+    <span id="pressure-sell-pct" style="color:#ea4335">—</span>
+  </div>
+  <div id="order-sources" style="margin-top:8px;font-size:0.75rem;color:#5f6368;display:none"></div>
 </div>
 
 <!-- 52주 범위 -->
@@ -234,6 +258,26 @@
       <div id="ipo-badge">—</div>
     </div>
   </div>
+</div>
+
+<!-- IPO 재무 지표 -->
+<div class="card">
+  <div class="card-title">IPO 재무 지표</div>
+  <div class="info-row"><span>공모 주식 수</span><span id="ipo-shares">—</span></div>
+  <div class="info-row"><span>상장 주식 수</span><span id="listed-shares">—</span></div>
+  <div class="divider"></div>
+  <div class="info-row"><span>매출액</span><span id="total-sales">—</span></div>
+  <div class="info-row"><span>당기순이익</span><span id="net-profit">—</span></div>
+  <div class="divider"></div>
+  <div class="info-row"><span>3개월 전 가격</span><span id="three-month-ago">—</span></div>
+  <div class="info-row"><span>월평균 일거래량</span><span id="monthly-avg-vol">—</span></div>
+  <div class="info-row"><span>매도 가능 주식</span><span id="sell-stock-count">—</span></div>
+</div>
+
+<!-- IPO 진행 일정 -->
+<div class="card">
+  <div class="card-title">IPO 진행 일정</div>
+  <div id="ipo-timeline"></div>
 </div>
 
 <!-- 최근 체결 내역 -->
@@ -272,6 +316,13 @@
   const fmtNum = n => n != null ? Number(n).toLocaleString("ko-KR") : "—";
   const fmtRate   = r => r != null ? (r > 0 ? "+" : "") + Number(r).toFixed(2) + "%" : "—";
   const fmtChange = c => c != null ? (c > 0 ? "+" : "") + Number(c).toLocaleString("ko-KR") + "원" : "—";
+  const fmtWon = n => {
+    if (n == null) return "—";
+    const s = n < 0 ? "-" : "", a = Math.abs(n);
+    if (a >= 1e12) return s + (a / 1e12).toFixed(1) + "조";
+    if (a >= 1e8)  return s + Math.round(a / 1e8) + "억";
+    return s + Number(a).toLocaleString("ko-KR");
+  };
   const fmtCap = n => {
     if (n == null) return "—";
     if (n >= 1e12) return (n / 1e12).toFixed(1) + "조";
@@ -316,6 +367,22 @@
     });
   }
 
+  function renderTimeline(schedules, currentState) {
+    const el = document.getElementById("ipo-timeline");
+    if (!schedules || !schedules.length) { el.innerHTML = "<p style='color:#5f6368;font-size:0.85rem'>일정 정보 없음</p>"; return; }
+    const currentIdx = schedules.findIndex(s => s.state === currentState);
+    el.innerHTML = schedules.map((s, i) => {
+      const status = i < currentIdx ? "done" : i === currentIdx ? "current" : "pending";
+      return `<div class="timeline-item">
+        <div class="tl-dot ${status}"></div>
+        <div>
+          <div class="tl-label ${status}">${s.label}</div>
+          <div class="tl-date">${s.date ? s.date.replace(/-/g, ".") : "—"}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
   document.querySelectorAll(".period-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".period-btn").forEach(b => b.classList.remove("active"));
@@ -351,7 +418,23 @@
       document.getElementById("today-low").textContent = fmt(d.today_low);
       document.getElementById("today-volume").textContent = fmtNum(d.today_volume) + "주";
       document.getElementById("today-stats").textContent =
-        `${d.trade_count_today}건 / ${d.order_sell_today}건`;
+        `${fmtNum(d.order_buy_today)} / ${fmtNum(d.order_sell_today)}`;
+      const buy = d.order_buy_today || 0, sell = d.order_sell_today || 0, total = buy + sell;
+      if (total > 0) {
+        const pct = Math.round(buy / total * 100);
+        document.getElementById("pressure-buy").style.width = pct + "%";
+        document.getElementById("pressure-buy-pct").textContent = "매수 " + pct + "%";
+        document.getElementById("pressure-sell-pct").textContent = "매도 " + (100 - pct) + "%";
+      }
+      const srcEl = document.getElementById("order-sources");
+      if (d.order_sources && Object.keys(d.order_sources).length > 1) {
+        srcEl.style.display = "block";
+        srcEl.innerHTML = Object.values(d.order_sources)
+          .map(s => `<span style="margin-right:12px">${s.label} <span style="color:#34a853">${fmtNum(s.buy)}</span> / <span style="color:#ea4335">${fmtNum(s.sell)}</span></span>`)
+          .join("");
+      } else {
+        srcEl.style.display = "none";
+      }
 
       // 52주 범위 바
       const lo = d.low_52w, hi = d.high_52w, cur = d.current_price;
@@ -374,6 +457,24 @@
         d.ipo_status === "상장완료" ? "green" :
         d.ipo_status === "철회" ? "red" : "gray";
       badgeEl.innerHTML = `<span class="badge ${badgeClass}">${d.ipo_status || "해당없음"}</span>`;
+
+      // IPO 재무 지표
+      document.getElementById("ipo-shares").textContent = fmtNum(d.ipo_shares) + "주";
+      document.getElementById("listed-shares").textContent = fmtNum(d.listed_shares) + "주";
+      document.getElementById("total-sales").textContent = fmtWon(d.total_sales);
+      const npEl = document.getElementById("net-profit");
+      npEl.textContent = fmtWon(d.net_profit);
+      npEl.className = (d.net_profit ?? 0) >= 0 ? "up" : "down";
+      document.getElementById("monthly-avg-vol").textContent = fmtNum(d.monthly_avg_volume) + "주";
+      document.getElementById("sell-stock-count").textContent = fmtNum(d.sell_stock_count) + "주";
+      if (d.three_month_ago_price && d.current_price) {
+        const chg = ((d.current_price - d.three_month_ago_price) / d.three_month_ago_price * 100).toFixed(1);
+        document.getElementById("three-month-ago").innerHTML =
+          `${fmt(d.three_month_ago_price)} <span class="${chg >= 0 ? 'up' : 'down'}" style="font-size:0.8rem">(${chg >= 0 ? "+" : ""}${chg}%)</span>`;
+      }
+
+      // IPO 진행 일정
+      renderTimeline(d.ipo_schedules, d.ipo_current_state);
 
       // 최근 체결 내역
       const tradesEl = document.getElementById("recent-trades");

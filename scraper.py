@@ -16,7 +16,13 @@ HEADERS = {
 }
 
 STOCK_URL = "https://www.ustockplus.com/stock/stradvision-475040"
+SEOULOTC_URL = "https://www.seoulotc.com/stock/475040"
 CHART_PERIODS = ["1m", "3m", "1y", "3y", "all"]
+
+SOURCE_LABELS = {
+    "ustockplus": "증권플러스",
+    "seoulotc":   "서울거래소",
+}
 
 IPO_STATUS_MAP = {
     "IPO_ORGANIZER_SELECTION": "주관사선정",
@@ -35,8 +41,8 @@ IPO_STATUS_MAP = {
 }
 
 
-def _fetch_queries() -> dict:
-    resp = requests.get(STOCK_URL, headers=HEADERS, timeout=15, verify=False)
+def _fetch_queries(url: str) -> dict:
+    resp = requests.get(url, headers=HEADERS, timeout=15, verify=False)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
     tag = soup.find("script", id="__NEXT_DATA__")
@@ -47,9 +53,9 @@ def _fetch_queries() -> dict:
     return {tuple(q["queryKey"]): q["state"].get("data") for q in queries}
 
 
-def get_price() -> dict:
+def _get_ustockplus() -> dict:
     try:
-        qmap = _fetch_queries()
+        qmap = _fetch_queries(STOCK_URL)
 
         # 1. 현재가 / 전일대비
         stock = (qmap.get(("stockDetail", "475040")) or {}).get("stock", {})
@@ -106,6 +112,31 @@ def get_price() -> dict:
         ipo_detail_state = (ipo.get("progress") or {}).get("ipoDetailState")
         ipo_status = IPO_STATUS_MAP.get(ipo_detail_state, "해당없음")
 
+        # 6b. IPO 일정
+        ipo_schedules_raw = (ipo.get("ipoSchedule") or {}).get("ipoSchedules", [])
+        ipo_schedules = [
+            {
+                "state": e.get("ipoState", ""),
+                "label": IPO_STATUS_MAP.get(e.get("ipoState", ""), e.get("ipoState", "")),
+                "date": e.get("startBaseDate"),
+            }
+            for e in ipo_schedules_raw
+        ]
+        ipo_current_state = (ipo.get("ipoSchedule") or {}).get("ipoState", "")
+
+        # 6c. IPO 재무 지표
+        ipo_fin = (ipo.get("estimatedMarketCapAndIpoInformation") or {})
+        ipo_shares    = ipo_fin.get("numberOfIpoShares")
+        listed_shares = ipo_fin.get("numberOfListedStockShare")
+        total_sales   = ipo_fin.get("totalSales")
+        net_profit    = ipo_fin.get("netProfit")
+
+        # 6d. 3개월 비교 / 거래 현황
+        tip = (ipo.get("tradeInProgress") or {})
+        three_month_ago_price = tip.get("threeMonthAgoCurrentPrice")
+        monthly_avg_volume    = tip.get("monthlyAverageDailyTradingVolume")
+        sell_stock_count      = tip.get("sellStockCount")
+
         # 7. 기간별 차트
         charts = {}
         for period in CHART_PERIODS:
@@ -135,6 +166,15 @@ def get_price() -> dict:
             "trade_count_today": trade_count_today,
             "recent_trades": recent_trades,
             "ipo_status": ipo_status,
+            "ipo_schedules": ipo_schedules,
+            "ipo_current_state": ipo_current_state,
+            "ipo_shares": ipo_shares,
+            "listed_shares": listed_shares,
+            "total_sales": total_sales,
+            "net_profit": net_profit,
+            "three_month_ago_price": three_month_ago_price,
+            "monthly_avg_volume": monthly_avg_volume,
+            "sell_stock_count": sell_stock_count,
             "charts": charts,
             "updated_at": datetime.now().isoformat(),
         }
@@ -144,6 +184,58 @@ def get_price() -> dict:
             "error": str(e),
             "updated_at": datetime.now().isoformat(),
         }
+
+
+def _get_seoulotc() -> dict | None:
+    """서울거래소 비상장에서 매수/매도 주문 수 수집. 실패 시 None 반환."""
+    try:
+        qmap = _fetch_queries(SEOULOTC_URL)
+        # TODO: 사이트 구조 확인 후 실제 키 이름으로 교체
+        # 현재는 ustockplus와 동일한 키 이름 시도
+        stats = qmap.get(("stockDetailStatistics", "475040")) or {}
+        order_buy_today = stats.get("orderBuyToday")
+        order_sell_today = stats.get("orderSellToday")
+        if order_buy_today is None and order_sell_today is None:
+            return None
+        return {
+            "order_buy_today":  order_buy_today or 0,
+            "order_sell_today": order_sell_today or 0,
+        }
+    except Exception:
+        return None
+
+
+def get_price() -> dict:
+    primary = _get_ustockplus()
+    if not primary["success"]:
+        return primary
+
+    sources = {
+        "ustockplus": {
+            "buy":   primary["order_buy_today"],
+            "sell":  primary["order_sell_today"],
+            "label": SOURCE_LABELS["ustockplus"],
+        }
+    }
+
+    for name, fn in [("seoulotc", _get_seoulotc)]:
+        result = fn()
+        if result:
+            sources[name] = {
+                "buy":   result["order_buy_today"],
+                "sell":  result["order_sell_today"],
+                "label": SOURCE_LABELS.get(name, name),
+            }
+
+    total_buy  = sum(s["buy"]  for s in sources.values())
+    total_sell = sum(s["sell"] for s in sources.values())
+
+    return {
+        **primary,
+        "order_buy_today":  total_buy,
+        "order_sell_today": total_sell,
+        "order_sources":    sources,
+    }
 
 
 if __name__ == "__main__":
