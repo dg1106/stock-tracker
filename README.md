@@ -8,11 +8,16 @@
 - 매도 최저가 / 매수 최고가
 - 오늘 고가·저가·거래량·체결 수
 - 52주 가격 범위 (현재가 위치 바)
-- 시가총액 / IPO 상태
+- 시가총액 / IPO 상태 및 일정
+- IPO 재무 지표 (공모주식수, 상장주식수, 매출액, 영업이익, 순이익)
+- 3개월 전 가격 비교 / 월평균 거래량 / 매도 잔여 주식 수
+- 매수/매도 주문 압력 (출처별: 증권플러스, 서울거래소 비상장)
 - 최근 체결 내역 5건
 - 가격 추이 차트 (1개월 / 3개월 / 1년 / 3년 / 전체)
 
-데이터 출처: [증권플러스 비상장](https://www.ustockplus.com/stock/stradvision-475040)
+데이터 출처:
+- [증권플러스 비상장](https://www.ustockplus.com/stock/stradvision-475040)
+- [서울거래소 비상장](https://www.seoulotc.com/stock/475040)
 
 ## 로컬 실행
 
@@ -22,6 +27,12 @@ uvicorn main:app --reload
 ```
 
 브라우저에서 `http://localhost:8000` 접속
+
+스크래퍼 단독 테스트:
+
+```bash
+python scraper.py
+```
 
 ## 배포 (Render.com)
 

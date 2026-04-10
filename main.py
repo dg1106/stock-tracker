@@ -13,19 +13,23 @@ _cache: dict = {"data": None}
 
 
 async def _refresh_loop():
-    """60초마다 가격을 갱신한다."""
+    """60�����다�신한다 (� 로드는 lifespan에서 수행)."""
     while True:
+        await asyncio.sleep(60)
         try:
             data = await asyncio.get_event_loop().run_in_executor(None, get_price)
             _cache["data"] = data
         except Exception as e:
             print(f"[refresh] error: {e}")
-        await asyncio.sleep(60)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_refresh_loop())  # 바로 백그라운드로
+    try:
+        _cache["data"] = await asyncio.get_event_loop().run_in_executor(None, get_price)
+    except Exception as e:
+        print(f"[startup] initial fetch error: {e}")
+    task = asyncio.create_task(_refresh_loop())
     yield
     task.cancel()
 

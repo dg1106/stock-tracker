@@ -32,6 +32,7 @@ IPO_STATUS_MAP = {
     "EXAMINATION_ACCEPTED": "심사승인",
     "SUBMIT_REPORT": "증권신고서제출",
     "DEMAND_FORECAST": "수요예측",
+    "TO_BE_DEMAND_FORECAST": "수요예측",
     "OFFER_SUBSCRIPTION": "청약",
     "TO_BE_LISTED": "상장예정",
     "ALLOTMENT_DATE": "배정일",
@@ -110,7 +111,14 @@ def _get_ustockplus() -> dict:
         # 6. IPO 상태
         ipo = qmap.get(("stockIpoDetail", "475040")) or {}
         ipo_detail_state = (ipo.get("progress") or {}).get("ipoDetailState")
-        ipo_status = IPO_STATUS_MAP.get(ipo_detail_state, "해당없음")
+        ipo_current_state = (ipo.get("ipoSchedule") or {}).get("ipoState") or ""
+        ipo_status = (
+            IPO_STATUS_MAP.get(ipo_detail_state)
+            or IPO_STATUS_MAP.get(ipo_current_state)
+            or ipo_detail_state
+            or ipo_current_state
+            or "해당없음"
+        )
 
         # 6b. IPO 일정
         ipo_schedules_raw = (ipo.get("ipoSchedule") or {}).get("ipoSchedules", [])
@@ -122,13 +130,15 @@ def _get_ustockplus() -> dict:
             }
             for e in ipo_schedules_raw
         ]
-        ipo_current_state = (ipo.get("ipoSchedule") or {}).get("ipoState", "")
 
         # 6c. IPO 재무 지표
         ipo_fin = (ipo.get("estimatedMarketCapAndIpoInformation") or {})
         ipo_shares    = ipo_fin.get("numberOfIpoShares")
         listed_shares = ipo_fin.get("numberOfListedStockShare")
         total_sales   = ipo_fin.get("totalSales")
+        operating_profit = ipo_fin.get("operatingProfit")
+        if operating_profit is None:
+            operating_profit = ipo_fin.get("operatingIncome")
         net_profit    = ipo_fin.get("netProfit")
 
         # 6d. 3개월 비교 / 거래 현황
@@ -166,11 +176,13 @@ def _get_ustockplus() -> dict:
             "trade_count_today": trade_count_today,
             "recent_trades": recent_trades,
             "ipo_status": ipo_status,
+            "ipo_raw_state": ipo_detail_state,
             "ipo_schedules": ipo_schedules,
             "ipo_current_state": ipo_current_state,
             "ipo_shares": ipo_shares,
             "listed_shares": listed_shares,
             "total_sales": total_sales,
+            "operating_profit": operating_profit,
             "net_profit": net_profit,
             "three_month_ago_price": three_month_ago_price,
             "monthly_avg_volume": monthly_avg_volume,
